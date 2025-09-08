@@ -1,0 +1,2 @@
+# FODS
+Trie DataStructure use
