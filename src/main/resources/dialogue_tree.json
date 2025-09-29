@@ -1,0 +1,51 @@
+{
+  "root": {
+    "response": "Hello! I'm your medical assistant. What symptoms are you experiencing today?",
+    "suggestions": ["headache", "fever", "cough", "stomach pain", "body ache"],
+    "children": {
+      "headache": {
+        "response": "You mentioned a headache. Can you describe the type of pain?",
+        "suggestions": ["throbbing", "dull", "sharp", "pressure"],
+        "children": {
+          "throbbing": {
+            "response": "A throbbing headache noted. Do you experience sensitivity to light or sound?",
+            "suggestions": ["yes", "no", "light sensitive", "sound sensitive"],
+            "children": {
+              "yes": {
+                "response": "This sounds like a migraine headache.",
+                "remedy": "Take Sumatriptan 50mg or Ibuprofen 400mg. Rest in a dark, quiet room. Apply cold compress to forehead.",
+                "isEnd": true
+              },
+              "no": {
+                "response": "This appears to be a tension headache.",
+                "remedy": "Take Paracetamol 650mg or Dolo 650. Apply warm compress. Practice relaxation techniques.",
+                "isEnd": true
+              }
+            }
+          },
+          "dull": {
+            "response": "A dull headache can indicate tension or dehydration.",
+            "remedy": "Take Paracetamol 500mg. Drink plenty of water. Get adequate rest. Practice neck stretches.",
+            "isEnd": true
+          }
+        }
+      },
+      "fever": {
+        "response": "You have a fever. What is your temperature range?",
+        "suggestions": ["high fever", "low fever", "moderate", "above 102", "below 100"],
+        "children": {
+          "high": {
+            "response": "High fever requires immediate attention.",
+            "remedy": "Take Paracetamol 500mg every 6 hours. Sponge with lukewarm water. Drink fluids. See doctor if above 102°F.",
+            "isEnd": true
+          },
+          "low": {
+            "response": "Low-grade fever is usually manageable at home.",
+            "remedy": "Take Dolo 650mg. Rest well. Drink warm liquids. Monitor temperature regularly.",
+            "isEnd": true
+          }
+        }
+      }
+    }
+  }
+}
