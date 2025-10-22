@@ -22,7 +22,8 @@ public class UserService {
     @Autowired
     private UserPreferencesRepository userPreferencesRepository;
 
-    private BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    // FIXED: Use static final with consistent strength
+    private static final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder(10);
 
     public User registerUser(String email, String password, String fullName) {
         if (userRepository.existsByEmail(email)) {

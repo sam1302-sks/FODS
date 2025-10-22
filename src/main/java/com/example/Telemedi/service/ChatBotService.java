@@ -209,4 +209,6 @@ public class ChatBotService {
         activeSessions.entrySet().removeIf(entry ->
                 currentTime - entry.getValue().getLastActivity() > sessionTimeout);
     }
+
+
 }

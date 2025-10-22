@@ -1,745 +1,1191 @@
-package com.example.Telemedi.ui;
-
-import com.example.Telemedi.TelemediApplication;
-import com.example.Telemedi.dto.QueryRequest;
-import com.example.Telemedi.dto.BotResponse;
-import com.example.Telemedi.service.ChatBotService;
-
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
-import javax.swing.plaf.basic.BasicScrollBarUI;
-import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.geom.RoundRectangle2D;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-
-public class ChatWindow extends JFrame {
-
-    // Colors - Medical Theme
-    private static final Color PRIMARY_BLUE = new Color(0, 123, 255);
-    private static final Color PRIMARY_DARK = new Color(0, 86, 179);
-    private static final Color SUCCESS_GREEN = new Color(40, 167, 69);
-    private static final Color LIGHT_GRAY = new Color(248, 249, 250);
-    private static final Color DARK_GRAY = new Color(52, 58, 64);
-    private static final Color BORDER_GRAY = new Color(222, 226, 230);
-    private static final Color CHAT_BG = new Color(255, 255, 255);
-    private static final Color USER_BUBBLE = new Color(0, 123, 255);
-    private static final Color BOT_BUBBLE = new Color(248, 249, 250);
-    private static final Color REMEDY_GREEN = new Color(25, 135, 84);
-
-    // Components
-    private JPanel chatPanel;
-    private JTextField messageField;
-    private JButton sendButton;
-    private JScrollPane scrollPane;
-    private JLabel typingLabel;
-    private JPanel headerPanel;
-    private JLabel userNameLabel;
-    private JLabel onlineStatusLabel;
-
-    // Services
-    private ChatBotService chatBotService;
-    private String currentSessionId;
-    private String currentUser = "Samarth"; // Will be dynamic from login
-
-    public ChatWindow() {
-        initializeComponents();
-        setupLayout();
-        setupEventHandlers();
-        startConversation();
-    }
-
-    private void initializeComponents() {
-        // Get Spring service
-        chatBotService = TelemediApplication.getSpringContext().getBean(ChatBotService.class);
-
-        // Window setup with custom close behavior
-        setTitle("TeleMedi - Advanced Medical Assistant");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1200, 800);
-        setLocationRelativeTo(null);
-        setResizable(true);
-
-        // Custom window icon (you can add actual icon file)
-        try {
-            // setIconImage(Toolkit.getDefaultToolkit().getImage("medical-icon.png"));
-        } catch (Exception e) {
-            // Default icon
-        }
-
-        // Main chat panel with custom background
-        chatPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                // Subtle gradient background
-                GradientPaint gradient = new GradientPaint(
-                        0, 0, new Color(255, 255, 255),
-                        0, getHeight(), new Color(250, 252, 255)
-                );
-                g2d.setPaint(gradient);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
-            }
-        };
-        chatPanel.setLayout(new BoxLayout(chatPanel, BoxLayout.Y_AXIS));
-        chatPanel.setBorder(new EmptyBorder(30, 40, 30, 40));
-
-        // Custom scrollpane with modern scrollbar
-        scrollPane = new JScrollPane(chatPanel) {
-            @Override
-            public void paintComponent(Graphics g) {
-                super.paintComponent(g);
-            }
-        };
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-        scrollPane.setBorder(null);
-
-        // Custom scrollbar styling
-        scrollPane.getVerticalScrollBar().setUI(new ModernScrollBarUI());
-
-        // Modern input field with rounded corners
-        messageField = new ModernTextField("Type your symptoms here...");
-        messageField.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        messageField.setPreferredSize(new Dimension(0, 50));
-
-        // Modern send button
-        sendButton = new ModernButton("Send", PRIMARY_BLUE);
-        sendButton.setPreferredSize(new Dimension(100, 50));
-
-        // Typing indicator
-        typingLabel = new JLabel("  ");
-        typingLabel.setFont(new Font("Segoe UI", Font.ITALIC, 14));
-        typingLabel.setForeground(new Color(108, 117, 125));
-    }
-
-    private void setupLayout() {
-        setLayout(new BorderLayout());
-
-        // Professional Header with gradient
-        headerPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                // Medical gradient header
-                GradientPaint gradient = new GradientPaint(
-                        0, 0, new Color(0, 123, 255),
-                        getWidth(), 0, new Color(32, 201, 151)
-                );
-                g2d.setPaint(gradient);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
-
-                // Subtle medical cross pattern
-                g2d.setColor(new Color(255, 255, 255, 30));
-                for (int i = 0; i < getWidth(); i += 100) {
-                    for (int j = 0; j < getHeight(); j += 50) {
-                        g2d.fillRect(i + 20, j + 15, 15, 3);
-                        g2d.fillRect(i + 26, j + 9, 3, 15);
-                    }
-                }
-            }
-        };
-        headerPanel.setPreferredSize(new Dimension(0, 120));
-        headerPanel.setLayout(new BorderLayout());
-
-        // Left side of header - App info
-        JPanel leftHeaderPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 30, 20));
-        leftHeaderPanel.setOpaque(false);
-
-        JLabel appIconLabel = new JLabel("🏥");
-        appIconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 40));
-
-        JPanel appInfoPanel = new JPanel();
-        appInfoPanel.setLayout(new BoxLayout(appInfoPanel, BoxLayout.Y_AXIS));
-        appInfoPanel.setOpaque(false);
-
-        JLabel titleLabel = new JLabel("TeleMedi Pro");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
-        titleLabel.setForeground(Color.WHITE);
-        titleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        JLabel subtitleLabel = new JLabel("AI-Powered Medical Symptom Analysis");
-        subtitleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        subtitleLabel.setForeground(new Color(220, 235, 255));
-        subtitleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        appInfoPanel.add(titleLabel);
-        appInfoPanel.add(Box.createVerticalStrut(5));
-        appInfoPanel.add(subtitleLabel);
-
-        leftHeaderPanel.add(appIconLabel);
-        leftHeaderPanel.add(appInfoPanel);
-
-        // Right side of header - User info
-        JPanel rightHeaderPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 30, 20));
-        rightHeaderPanel.setOpaque(false);
-
-        JPanel userInfoPanel = new JPanel();
-        userInfoPanel.setLayout(new BoxLayout(userInfoPanel, BoxLayout.Y_AXIS));
-        userInfoPanel.setOpaque(false);
-
-        userNameLabel = new JLabel("Welcome, " + currentUser);
-        userNameLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        userNameLabel.setForeground(Color.WHITE);
-        userNameLabel.setAlignmentX(Component.RIGHT_ALIGNMENT);
-
-        onlineStatusLabel = new JLabel("🟢 Online • Secure Session");
-        onlineStatusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-        onlineStatusLabel.setForeground(new Color(220, 255, 220));
-        onlineStatusLabel.setAlignmentX(Component.RIGHT_ALIGNMENT);
-
-        JButton profileButton = new ModernButton("Profile", new Color(255, 255, 255, 30));
-        profileButton.setForeground(Color.WHITE);
-        profileButton.setPreferredSize(new Dimension(80, 35));
-        profileButton.setAlignmentX(Component.RIGHT_ALIGNMENT);
-
-        userInfoPanel.add(userNameLabel);
-        userInfoPanel.add(Box.createVerticalStrut(3));
-        userInfoPanel.add(onlineStatusLabel);
-        userInfoPanel.add(Box.createVerticalStrut(5));
-        userInfoPanel.add(profileButton);
-
-        rightHeaderPanel.add(userInfoPanel);
-
-        headerPanel.add(leftHeaderPanel, BorderLayout.WEST);
-        headerPanel.add(rightHeaderPanel, BorderLayout.EAST);
-
-        // Chat area with better styling
-        JPanel chatAreaPanel = new JPanel(new BorderLayout());
-        chatAreaPanel.add(scrollPane, BorderLayout.CENTER);
-
-        // Input area with modern design
-        JPanel inputAreaPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                // Subtle gradient for input area
-                GradientPaint gradient = new GradientPaint(
-                        0, 0, new Color(248, 249, 250),
-                        0, getHeight(), new Color(255, 255, 255)
-                );
-                g2d.setPaint(gradient);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
-
-                // Top border
-                g2d.setColor(BORDER_GRAY);
-                g2d.drawLine(0, 0, getWidth(), 0);
-            }
-        };
-        inputAreaPanel.setBorder(new EmptyBorder(25, 40, 25, 40));
-        inputAreaPanel.setLayout(new BorderLayout(20, 10));
-
-        // Typing indicator panel
-        JPanel typingPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        typingPanel.setOpaque(false);
-        typingPanel.add(typingLabel);
-
-        // Input field container
-        JPanel inputContainer = new JPanel(new BorderLayout(15, 0));
-        inputContainer.setOpaque(false);
-        inputContainer.add(messageField, BorderLayout.CENTER);
-        inputContainer.add(sendButton, BorderLayout.EAST);
-
-        // Disclaimer
-        JLabel disclaimerLabel = new JLabel(
-                "<html><center>⚠️ <b>Medical Disclaimer:</b> This AI assistant provides general information only. " +
-                        "Always consult qualified healthcare professionals for medical advice, diagnosis, or treatment.</center></html>"
-        );
-        disclaimerLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        disclaimerLabel.setForeground(new Color(108, 117, 125));
-        disclaimerLabel.setHorizontalAlignment(SwingConstants.CENTER);
-
-        inputAreaPanel.add(typingPanel, BorderLayout.NORTH);
-        inputAreaPanel.add(inputContainer, BorderLayout.CENTER);
-        inputAreaPanel.add(disclaimerLabel, BorderLayout.SOUTH);
-
-        add(headerPanel, BorderLayout.NORTH);
-        add(chatAreaPanel, BorderLayout.CENTER);
-        add(inputAreaPanel, BorderLayout.SOUTH);
-    }
-
-    private void setupEventHandlers() {
-        sendButton.addActionListener(e -> sendMessage());
-        messageField.addActionListener(e -> sendMessage());
-
-        // Enhanced button interactions
-        sendButton.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseEntered(java.awt.event.MouseEvent evt) {
-                sendButton.setBackground(PRIMARY_DARK);
-                setCursor(new Cursor(Cursor.HAND_CURSOR));
-            }
-            public void mouseExited(java.awt.event.MouseEvent evt) {
-                sendButton.setBackground(PRIMARY_BLUE);
-                setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
-            }
-        });
-    }
-
-    private void startConversation() {
-        // Add welcome message with animation
-        addWelcomeMessage();
-
-        QueryRequest initialRequest = new QueryRequest(null, "");
-        BotResponse response = chatBotService.processQuery(initialRequest);
-        currentSessionId = response.getSessionId();
-
-        // Delayed bot response for natural feel
-        Timer timer = new Timer();
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                SwingUtilities.invokeLater(() -> {
-                    hideTypingIndicator();
-                    addBotMessage(response.getMessage());
-
-                    if (response.getSuggestions() != null && !response.getSuggestions().isEmpty()) {
-                        addSuggestionButtons(response.getSuggestions());
-                    }
-                });
-            }
-        }, 1500);
-
-        showTypingIndicator();
-    }
-
-    private void addWelcomeMessage() {
-        JPanel welcomePanel = new JPanel();
-        welcomePanel.setLayout(new BoxLayout(welcomePanel, BoxLayout.Y_AXIS));
-        welcomePanel.setOpaque(false);
-        welcomePanel.setBorder(new EmptyBorder(20, 0, 30, 0));
-
-        JLabel welcomeIcon = new JLabel("👨‍⚕️", SwingConstants.CENTER);
-        welcomeIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 48));
-        welcomeIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel welcomeText = new JLabel("Hello " + currentUser + "! I'm Dr. AI", SwingConstants.CENTER);
-        welcomeText.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        welcomeText.setForeground(DARK_GRAY);
-        welcomeText.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        JLabel welcomeSubtext = new JLabel("Your intelligent medical symptom assistant", SwingConstants.CENTER);
-        welcomeSubtext.setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        welcomeSubtext.setForeground(new Color(108, 117, 125));
-        welcomeSubtext.setAlignmentX(Component.CENTER_ALIGNMENT);
-
-        welcomePanel.add(welcomeIcon);
-        welcomePanel.add(Box.createVerticalStrut(15));
-        welcomePanel.add(welcomeText);
-        welcomePanel.add(Box.createVerticalStrut(8));
-        welcomePanel.add(welcomeSubtext);
-
-        chatPanel.add(welcomePanel);
-        refreshChat();
-    }
-
-    private void showTypingIndicator() {
-        typingLabel.setText("🤖 Dr. AI is analyzing...");
-        typingLabel.setVisible(true);
-    }
-
-    private void hideTypingIndicator() {
-        typingLabel.setText("  ");
-        typingLabel.setVisible(false);
-    }
-
-    private void sendMessage() {
-        String userMessage = messageField.getText().trim();
-        if (userMessage.isEmpty()) return;
-
-        // Add user message with animation
-        addUserMessage(userMessage);
-        messageField.setText("");
-        sendButton.setEnabled(false);
-
-        // Show typing indicator
-        showTypingIndicator();
-
-        // Process with chatbot (simulate network delay)
-        Timer timer = new Timer();
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                QueryRequest request = new QueryRequest(currentSessionId, userMessage);
-                BotResponse response = chatBotService.processQuery(request);
-
-                SwingUtilities.invokeLater(() -> {
-                    hideTypingIndicator();
-
-                    // Add bot response
-                    addBotMessage(response.getMessage());
-
-                    // Add remedy if present
-                    if (response.getRemedy() != null && !response.getRemedy().isEmpty()) {
-                        Timer remedyTimer = new Timer();
-                        remedyTimer.schedule(new TimerTask() {
-                            @Override
-                            public void run() {
-                                SwingUtilities.invokeLater(() -> {
-                                    addRemedyMessage(response.getRemedy());
-                                });
-                            }
-                        }, 800);
-                    }
-
-                    // Add suggestion buttons
-                    if (response.getSuggestions() != null && !response.getSuggestions().isEmpty()) {
-                        Timer suggestionTimer = new Timer();
-                        suggestionTimer.schedule(new TimerTask() {
-                            @Override
-                            public void run() {
-                                SwingUtilities.invokeLater(() -> {
-                                    addSuggestionButtons(response.getSuggestions());
-                                });
-                            }
-                        }, 1200);
-                    }
-
-                    // Check if conversation ended
-                    if (response.isConversationEnd()) {
-                        Timer endTimer = new Timer();
-                        endTimer.schedule(new TimerTask() {
-                            @Override
-                            public void run() {
-                                SwingUtilities.invokeLater(() -> {
-                                    addSystemMessage("Consultation completed successfully! 🎉");
-                                    addNewChatButton();
-                                });
-                            }
-                        }, 1500);
-                    }
-
-                    sendButton.setEnabled(true);
-                });
-            }
-        }, 1000 + (int)(Math.random() * 1000)); // 1-2 second delay for realism
-    }
-
-    private void addUserMessage(String message) {
-        JPanel messagePanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 10));
-        messagePanel.setOpaque(false);
-
-        ModernChatBubble messageLabel = new ModernChatBubble(message, USER_BUBBLE, Color.WHITE, true);
-        messageLabel.setMaximumWidth(450);
-
-        messagePanel.add(messageLabel);
-        chatPanel.add(messagePanel);
-        chatPanel.add(Box.createVerticalStrut(15));
-
-        refreshChat();
-    }
-
-    private void addBotMessage(String message) {
-        JPanel messagePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
-        messagePanel.setOpaque(false);
-
-        // Bot avatar
-        JLabel avatarLabel = new JLabel("🤖");
-        avatarLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 20));
-        avatarLabel.setVerticalAlignment(SwingConstants.TOP);
-
-        ModernChatBubble messageLabel = new ModernChatBubble("Dr. AI: " + message, BOT_BUBBLE, DARK_GRAY, false);
-        messageLabel.setMaximumWidth(500);
-
-        messagePanel.add(avatarLabel);
-        messagePanel.add(Box.createHorizontalStrut(8));
-        messagePanel.add(messageLabel);
-        chatPanel.add(messagePanel);
-        chatPanel.add(Box.createVerticalStrut(15));
-
-        refreshChat();
-    }
-
-    private void addRemedyMessage(String remedy) {
-        JPanel remedyPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 10));
-        remedyPanel.setOpaque(false);
-
-        JLabel remedyIcon = new JLabel("💊");
-        remedyIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 20));
-        remedyIcon.setVerticalAlignment(SwingConstants.TOP);
-
-        ModernChatBubble remedyLabel = new ModernChatBubble(
-                "💊 Treatment Recommendation:\n\n" + remedy,
-                REMEDY_GREEN,
-                Color.WHITE,
-                false
-        );
-        remedyLabel.setMaximumWidth(550);
-
-        remedyPanel.add(remedyIcon);
-        remedyPanel.add(Box.createHorizontalStrut(8));
-        remedyPanel.add(remedyLabel);
-        chatPanel.add(remedyPanel);
-        chatPanel.add(Box.createVerticalStrut(20));
-
-        refreshChat();
-    }
-
-    private void addSuggestionButtons(List<String> suggestions) {
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        buttonPanel.setOpaque(false);
-        buttonPanel.setBorder(new EmptyBorder(0, 48, 0, 20));
-
-        JLabel suggestionLabel = new JLabel("💡 Quick Options:");
-        suggestionLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        suggestionLabel.setForeground(new Color(108, 117, 125));
-
-        JPanel labelPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        labelPanel.setOpaque(false);
-        labelPanel.add(suggestionLabel);
-
-        JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 5));
-        buttonsPanel.setOpaque(false);
-
-        for (String suggestion : suggestions) {
-            ModernButton suggestionButton = new ModernButton(suggestion, new Color(108, 117, 125));
-            suggestionButton.setPreferredSize(new Dimension(
-                    suggestionButton.getFontMetrics(suggestionButton.getFont()).stringWidth(suggestion) + 30,
-                    35
-            ));
-
-            suggestionButton.addActionListener(e -> {
-                messageField.setText(suggestion);
-                sendMessage();
-            });
-
-            buttonsPanel.add(suggestionButton);
-        }
-
-        buttonPanel.add(labelPanel);
-        buttonPanel.add(buttonsPanel);
-
-        chatPanel.add(buttonPanel);
-        chatPanel.add(Box.createVerticalStrut(25));
-
-        refreshChat();
-    }
-
-    private void addSystemMessage(String message) {
-        JPanel systemPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 15));
-        systemPanel.setOpaque(false);
-
-        JLabel systemLabel = new JLabel(message);
-        systemLabel.setFont(new Font("Segoe UI", Font.ITALIC, 14));
-        systemLabel.setForeground(new Color(108, 117, 125));
-        systemLabel.setHorizontalAlignment(SwingConstants.CENTER);
-
-        systemPanel.add(systemLabel);
-        chatPanel.add(systemPanel);
-        chatPanel.add(Box.createVerticalStrut(15));
-
-        refreshChat();
-    }
-
-    private void addNewChatButton() {
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 20));
-        buttonPanel.setOpaque(false);
-
-        ModernButton newChatButton = new ModernButton("🆕 Start New Consultation", SUCCESS_GREEN);
-        newChatButton.setPreferredSize(new Dimension(250, 45));
-        newChatButton.setFont(new Font("Segoe UI", Font.BOLD, 14));
-
-        newChatButton.addActionListener(e -> {
-            chatPanel.removeAll();
-            startConversation();
-        });
-
-        buttonPanel.add(newChatButton);
-        chatPanel.add(buttonPanel);
-
-        refreshChat();
-    }
-
-    private void refreshChat() {
-        chatPanel.revalidate();
-        chatPanel.repaint();
-
-        SwingUtilities.invokeLater(() -> {
-            JScrollBar vertical = scrollPane.getVerticalScrollBar();
-            vertical.setValue(vertical.getMaximum());
-        });
-    }
-}
-
-// Custom Components for Modern UI
-
-class ModernTextField extends JTextField {
-    public ModernTextField(String placeholder) {
-        super(placeholder);
-        setFont(new Font("Segoe UI", Font.PLAIN, 16));
-        setBorder(BorderFactory.createCompoundBorder(
-                new RoundedBorder(25, new Color(222, 226, 230)),
-                new EmptyBorder(15, 20, 15, 20)
-        ));
-        setBackground(Color.WHITE);
-    }
-
-    @Override
-    protected void paintComponent(Graphics g) {
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        // Rounded background
-        g2d.setColor(getBackground());
-        g2d.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 25, 25);
-
-        g2d.dispose();
-        super.paintComponent(g);
-    }
-}
-
-class ModernButton extends JButton {
-    private Color backgroundColor;
-
-    public ModernButton(String text, Color bgColor) {
-        super(text);
-        this.backgroundColor = bgColor;
-        setFont(new Font("Segoe UI", Font.BOLD, 14));
-        setForeground(Color.WHITE);
-        setBorder(null);
-        setFocusPainted(false);
-        setContentAreaFilled(false);
-        setCursor(new Cursor(Cursor.HAND_CURSOR));
-    }
-
-    @Override
-    protected void paintComponent(Graphics g) {
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        // Button background
-        g2d.setColor(backgroundColor);
-        g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 25, 25);
-
-        g2d.dispose();
-        super.paintComponent(g);
-    }
-
-    @Override
-    public void setBackground(Color bg) {
-        this.backgroundColor = bg;
-        repaint();
-    }
-}
-
-class ModernChatBubble extends JLabel {
-    private Color bubbleColor;
-    private boolean isUser;
-    private int maxWidth;
-
-    public ModernChatBubble(String text, Color bgColor, Color textColor, boolean isUser) {
-        super("<html><div style='width: 300px; padding: 5px;'>" + text + "</div></html>");
-        this.bubbleColor = bgColor;
-        this.isUser = isUser;
-        this.maxWidth = 400;
-
-        setFont(new Font("Segoe UI", Font.PLAIN, 15));
-        setForeground(textColor);
-        setBorder(new EmptyBorder(15, 20, 15, 20));
-        setOpaque(false);
-    }
-
-    public void setMaximumWidth(int width) {
-        this.maxWidth = width;
-        setText("<html><div style='width: " + (width-40) + "px; padding: 5px;'>" +
-                getText().replaceAll("<html><div style='width: \\d+px; padding: 5px;'>", "")
-                        .replaceAll("</div></html>", "") + "</div></html>");
-    }
-
-    @Override
-    protected void paintComponent(Graphics g) {
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-        // Chat bubble with shadow
-        g2d.setColor(new Color(0, 0, 0, 10));
-        g2d.fillRoundRect(2, 2, getWidth() - 2, getHeight() - 2, 20, 20);
-
-        g2d.setColor(bubbleColor);
-        g2d.fillRoundRect(0, 0, getWidth() - 2, getHeight() - 2, 20, 20);
-
-        // Border
-        g2d.setColor(new Color(222, 226, 230));
-        g2d.drawRoundRect(0, 0, getWidth() - 2, getHeight() - 2, 20, 20);
-
-        g2d.dispose();
-        super.paintComponent(g);
-    }
-}
-
-class RoundedBorder implements javax.swing.border.Border {
-    private int radius;
-    private Color color;
-
-    public RoundedBorder(int radius, Color color) {
-        this.radius = radius;
-        this.color = color;
-    }
-
-    @Override
-    public Insets getBorderInsets(Component c) {
-        return new Insets(1, 1, 1, 1);
-    }
-
-    @Override
-    public boolean isBorderOpaque() {
-        return false;
-    }
-
-    @Override
-    public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setColor(color);
-        g2d.drawRoundRect(x, y, width - 1, height - 1, radius, radius);
-        g2d.dispose();
-    }
-}
-
-class ModernScrollBarUI extends BasicScrollBarUI {
-    @Override
-    protected void configureScrollBarColors() {
-        this.thumbColor = new Color(200, 200, 200);
-        this.trackColor = new Color(240, 240, 240);
-    }
-
-    @Override
-    protected JButton createDecreaseButton(int orientation) {
-        return createZeroButton();
-    }
-
-    @Override
-    protected JButton createIncreaseButton(int orientation) {
-        return createZeroButton();
-    }
-
-    private JButton createZeroButton() {
-        JButton button = new JButton();
-        button.setPreferredSize(new Dimension(0, 0));
-        button.setMinimumSize(new Dimension(0, 0));
-        button.setMaximumSize(new Dimension(0, 0));
-        return button;
-    }
-
-    @Override
-    protected void paintThumb(Graphics g, JComponent c, Rectangle thumbBounds) {
-        Graphics2D g2d = (Graphics2D) g.create();
-        g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setColor(thumbColor);
-        g2d.fillRoundRect(thumbBounds.x + 2, thumbBounds.y + 2,
-                thumbBounds.width - 4, thumbBounds.height - 4, 10, 10);
-        g2d.dispose();
-    }
-}
+//package com.example.Telemedi.ui;
+//
+//import com.example.Telemedi.TelemediApplication;
+//import com.example.Telemedi.dto.QueryRequest;
+//import com.example.Telemedi.dto.BotResponse;
+//import com.example.Telemedi.service.ChatBotService;
+//import com.example.Telemedi.service.UserService;
+//import com.example.Telemedi.entity.User;
+//
+//import javax.swing.*;
+//import javax.swing.border.EmptyBorder;
+//import javax.swing.plaf.basic.BasicScrollBarUI;
+//import java.awt.*;
+//import java.awt.event.ActionEvent;
+//import java.awt.event.ActionListener;
+//import java.util.List;
+//import java.util.Timer;
+//import java.util.TimerTask;
+//import java.util.Optional;
+//import java.time.format.DateTimeFormatter;
+//
+//public class ChatWindow extends JFrame {
+//
+//    // Perfect Modern Colors
+//    private static final Color PRIMARY_BLUE = new Color(25, 118, 210);
+//    private static final Color PRIMARY_DARK = new Color(13, 71, 161);
+//    private static final Color SUCCESS_GREEN = new Color(46, 125, 50);
+//    private static final Color ERROR_RED = new Color(211, 47, 47);
+//    private static final Color BACKGROUND_LIGHT = new Color(250, 251, 252);
+//    private static final Color CARD_WHITE = Color.WHITE;
+//    private static final Color TEXT_DARK = new Color(33, 33, 33);
+//    private static final Color TEXT_LIGHT = new Color(117, 117, 117);
+//
+//    // Components
+//    private JPanel contentArea;
+//    private JPanel chatPanel;
+//    private JTextField messageField;
+//    private JButton sendButton;
+//    private JScrollPane scrollPane;
+//    private JLabel typingLabel;
+//
+//    // Services
+//    private ChatBotService chatBotService;
+//    private UserService userService;
+//    private String currentSessionId;
+//    private User currentUser;
+//
+//    public ChatWindow() {
+//        initializeServices();
+//        initializeWindow();
+//        showLoginScreen();
+//    }
+//
+//    private void initializeServices() {
+//        try {
+//            chatBotService = TelemediApplication.getSpringContext().getBean(ChatBotService.class);
+//            userService = TelemediApplication.getSpringContext().getBean(UserService.class);
+//            System.out.println("✅ Services loaded successfully");
+//        } catch (Exception e) {
+//            System.err.println("❌ Service error: " + e.getMessage());
+//            e.printStackTrace();
+//        }
+//    }
+//
+//    private void initializeWindow() {
+//        // Perfect phone window setup
+//        setTitle("TeleMedi - Medical Assistant");
+//        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+//        setSize(400, 700);
+//        setLocationRelativeTo(null);
+//        setResizable(false);
+//
+//        // Main content area
+//        contentArea = new JPanel(new BorderLayout());
+//        contentArea.setBackground(BACKGROUND_LIGHT);
+//        setContentPane(contentArea);
+//
+//        initializeChatComponents();
+//    }
+//
+//    // FIXED - Chat components with proper layout
+//    private void initializeChatComponents() {
+//        // FIXED Chat panel with proper layout
+//        chatPanel = new JPanel();
+//        chatPanel.setLayout(new BoxLayout(chatPanel, BoxLayout.Y_AXIS)); // Keep BoxLayout
+//        chatPanel.setBackground(BACKGROUND_LIGHT);
+//        chatPanel.setBorder(new EmptyBorder(16, 0, 16, 0)); // Remove side padding - let messages handle it
+//
+//        // IMPORTANT: Set alignment policy
+//        chatPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+//
+//        // Scroll pane with proper settings
+//        scrollPane = new JScrollPane(chatPanel);
+//        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+//        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+//        scrollPane.setBorder(null);
+//        scrollPane.setBackground(BACKGROUND_LIGHT);
+//        scrollPane.getViewport().setBackground(BACKGROUND_LIGHT); // ADDED: Fix viewport background
+//
+//        // Input field
+//        messageField = new JTextField();
+//        messageField.setFont(new Font("Arial", Font.PLAIN, 16));
+//        messageField.setBorder(new EmptyBorder(12, 16, 12, 16));
+//        messageField.setBackground(CARD_WHITE);
+//
+//        // Send button
+//        sendButton = new JButton("Send");
+//        sendButton.setFont(new Font("Arial", Font.BOLD, 14));
+//        sendButton.setBackground(PRIMARY_BLUE);
+//        sendButton.setForeground(Color.WHITE);
+//        sendButton.setBorder(new EmptyBorder(12, 24, 12, 24));
+//        sendButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//
+//        // Typing label
+//        typingLabel = new JLabel(" ");
+//        typingLabel.setFont(new Font("Arial", Font.ITALIC, 13));
+//        typingLabel.setForeground(TEXT_LIGHT);
+//    }
+//
+//    // LOGIN SCREEN - PERFECTLY ALIGNED
+//    private void showLoginScreen() {
+//        contentArea.removeAll();
+//
+//        JPanel loginPanel = new JPanel() {
+//            @Override
+//            protected void paintComponent(Graphics g) {
+//                super.paintComponent(g);
+//                Graphics2D g2d = (Graphics2D) g;
+//                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+//
+//                // Beautiful gradient background
+//                GradientPaint gradient = new GradientPaint(
+//                        0, 0, PRIMARY_BLUE,
+//                        0, getHeight(), PRIMARY_DARK
+//                );
+//                g2d.setPaint(gradient);
+//                g2d.fillRect(0, 0, getWidth(), getHeight());
+//            }
+//        };
+//        loginPanel.setLayout(null); // Use absolute positioning for perfect alignment
+//
+//        // Logo and title section - PERFECTLY CENTERED
+//        JLabel logoLabel = new JLabel("🏥", SwingConstants.CENTER);
+//        logoLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 80));
+//        logoLabel.setBounds(150, 80, 100, 100); // Perfect center
+//        loginPanel.add(logoLabel);
+//
+//        JLabel titleLabel = new JLabel("TeleMedi", SwingConstants.CENTER);
+//        titleLabel.setFont(new Font("Arial", Font.BOLD, 36));
+//        titleLabel.setForeground(Color.WHITE);
+//        titleLabel.setBounds(50, 180, 300, 50);
+//        loginPanel.add(titleLabel);
+//
+//        JLabel subtitleLabel = new JLabel("Your AI Medical Assistant", SwingConstants.CENTER);
+//        subtitleLabel.setFont(new Font("Arial", Font.PLAIN, 16));
+//        subtitleLabel.setForeground(new Color(255, 255, 255, 200));
+//        subtitleLabel.setBounds(50, 230, 300, 30);
+//        loginPanel.add(subtitleLabel);
+//
+//        // Login form - PERFECTLY ALIGNED
+//        JPanel formPanel = new JPanel();
+//        formPanel.setLayout(null);
+//        formPanel.setOpaque(false);
+//        formPanel.setBounds(40, 300, 320, 300);
+//
+//        // Email field
+//        JLabel emailLabel = new JLabel("Email Address");
+//        emailLabel.setFont(new Font("Arial", Font.BOLD, 14));
+//        emailLabel.setForeground(Color.WHITE);
+//        emailLabel.setBounds(0, 0, 320, 25);
+//        formPanel.add(emailLabel);
+//
+//        JTextField emailField = new JTextField();
+//        emailField.setFont(new Font("Arial", Font.PLAIN, 16));
+//        emailField.setBorder(new EmptyBorder(15, 20, 15, 20));
+//        emailField.setBackground(Color.WHITE);
+//        emailField.setForeground(TEXT_DARK);
+//        emailField.setBounds(0, 30, 320, 50);
+//        formPanel.add(emailField);
+//
+//        // Password field
+//        JLabel passwordLabel = new JLabel("Password");
+//        passwordLabel.setFont(new Font("Arial", Font.BOLD, 14));
+//        passwordLabel.setForeground(Color.WHITE);
+//        passwordLabel.setBounds(0, 100, 320, 25);
+//        formPanel.add(passwordLabel);
+//
+//        JPasswordField passwordField = new JPasswordField();
+//        passwordField.setFont(new Font("Arial", Font.PLAIN, 16));
+//        passwordField.setBorder(new EmptyBorder(15, 20, 15, 20));
+//        passwordField.setBackground(Color.WHITE);
+//        passwordField.setForeground(TEXT_DARK);
+//        passwordField.setBounds(0, 130, 320, 50);
+//        formPanel.add(passwordField);
+//
+//        // Login button - PERFECTLY STYLED
+//        JButton loginButton = new JButton("Sign In");
+//        loginButton.setFont(new Font("Arial", Font.BOLD, 18));
+//        loginButton.setBackground(CARD_WHITE);
+//        loginButton.setForeground(PRIMARY_BLUE);
+//        loginButton.setBorder(new EmptyBorder(15, 0, 15, 0));
+//        loginButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//        loginButton.setBounds(0, 200, 320, 55);
+//
+//        loginButton.addActionListener(e -> {
+//            String email = emailField.getText().trim();
+//            String password = new String(passwordField.getPassword());
+//
+//            if (email.isEmpty() || password.isEmpty()) {
+//                showMessage("Please fill in all fields", "Error", JOptionPane.ERROR_MESSAGE);
+//                return;
+//            }
+//
+//            performLogin(email, password);
+//        });
+//        formPanel.add(loginButton);
+//
+//        // Register link - PERFECTLY POSITIONED
+//        JLabel registerPrompt = new JLabel("Don't have an account?", SwingConstants.CENTER);
+//        registerPrompt.setFont(new Font("Arial", Font.PLAIN, 14));
+//        registerPrompt.setForeground(new Color(255, 255, 255, 180));
+//        registerPrompt.setBounds(0, 270, 200, 20);
+//        formPanel.add(registerPrompt);
+//
+//        JButton registerLink = new JButton("Sign Up");
+//        registerLink.setFont(new Font("Arial", Font.BOLD, 14));
+//        registerLink.setForeground(Color.WHITE);
+//        registerLink.setBorder(null);
+//        registerLink.setContentAreaFilled(false);
+//        registerLink.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//        registerLink.setBounds(200, 270, 120, 20);
+//        registerLink.addActionListener(e -> showRegisterScreen());
+//        formPanel.add(registerLink);
+//
+//        loginPanel.add(formPanel);
+//        contentArea.add(loginPanel, BorderLayout.CENTER);
+//
+//        contentArea.revalidate();
+//        contentArea.repaint();
+//    }
+//
+//    // REGISTER SCREEN - PERFECTLY ALIGNED
+//    private void showRegisterScreen() {
+//        contentArea.removeAll();
+//
+//        JPanel registerPanel = new JPanel() {
+//            @Override
+//            protected void paintComponent(Graphics g) {
+//                super.paintComponent(g);
+//                Graphics2D g2d = (Graphics2D) g;
+//                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+//
+//                GradientPaint gradient = new GradientPaint(
+//                        0, 0, SUCCESS_GREEN,
+//                        0, getHeight(), new Color(27, 94, 32)
+//                );
+//                g2d.setPaint(gradient);
+//                g2d.fillRect(0, 0, getWidth(), getHeight());
+//            }
+//        };
+//        registerPanel.setLayout(null);
+//
+//        // Header
+//        JButton backButton = new JButton("← Back");
+//        backButton.setFont(new Font("Arial", Font.BOLD, 16));
+//        backButton.setForeground(Color.WHITE);
+//        backButton.setBorder(null);
+//        backButton.setContentAreaFilled(false);
+//        backButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//        backButton.setBounds(20, 30, 100, 30);
+//        backButton.addActionListener(e -> showLoginScreen());
+//        registerPanel.add(backButton);
+//
+//        JLabel titleLabel = new JLabel("Create Account", SwingConstants.CENTER);
+//        titleLabel.setFont(new Font("Arial", Font.BOLD, 28));
+//        titleLabel.setForeground(Color.WHITE);
+//        titleLabel.setBounds(50, 80, 300, 40);
+//        registerPanel.add(titleLabel);
+//
+//        // Form panel with scroll
+//        JPanel formPanel = new JPanel();
+//        formPanel.setLayout(null);
+//        formPanel.setOpaque(false);
+//        formPanel.setBounds(40, 140, 320, 500);
+//
+//        // Form fields - PERFECTLY SPACED
+//        int yPos = 0;
+//
+//        // Full Name
+//        JLabel nameLabel = new JLabel("Full Name *");
+//        nameLabel.setFont(new Font("Arial", Font.BOLD, 14));
+//        nameLabel.setForeground(Color.WHITE);
+//        nameLabel.setBounds(0, yPos, 320, 25);
+//        formPanel.add(nameLabel);
+//
+//        JTextField nameField = new JTextField();
+//        styleInputField(nameField);
+//        nameField.setBounds(0, yPos + 25, 320, 50);
+//        formPanel.add(nameField);
+//        yPos += 85;
+//
+//        // Email
+//        JLabel emailLabel = new JLabel("Email Address *");
+//        emailLabel.setFont(new Font("Arial", Font.BOLD, 14));
+//        emailLabel.setForeground(Color.WHITE);
+//        emailLabel.setBounds(0, yPos, 320, 25);
+//        formPanel.add(emailLabel);
+//
+//        JTextField emailField = new JTextField();
+//        styleInputField(emailField);
+//        emailField.setBounds(0, yPos + 25, 320, 50);
+//        formPanel.add(emailField);
+//        yPos += 85;
+//
+//        // Phone
+//        JLabel phoneLabel = new JLabel("Phone Number");
+//        phoneLabel.setFont(new Font("Arial", Font.BOLD, 14));
+//        phoneLabel.setForeground(Color.WHITE);
+//        phoneLabel.setBounds(0, yPos, 320, 25);
+//        formPanel.add(phoneLabel);
+//
+//        JTextField phoneField = new JTextField();
+//        styleInputField(phoneField);
+//        phoneField.setBounds(0, yPos + 25, 320, 50);
+//        formPanel.add(phoneField);
+//        yPos += 85;
+//
+//        // Password
+//        JLabel passwordLabel = new JLabel("Password *");
+//        passwordLabel.setFont(new Font("Arial", Font.BOLD, 14));
+//        passwordLabel.setForeground(Color.WHITE);
+//        passwordLabel.setBounds(0, yPos, 320, 25);
+//        formPanel.add(passwordLabel);
+//
+//        JPasswordField passwordField = new JPasswordField();
+//        styleInputField(passwordField);
+//        passwordField.setBounds(0, yPos + 25, 320, 50);
+//        formPanel.add(passwordField);
+//        yPos += 85;
+//
+//        // Confirm Password
+//        JLabel confirmLabel = new JLabel("Confirm Password *");
+//        confirmLabel.setFont(new Font("Arial", Font.BOLD, 14));
+//        confirmLabel.setForeground(Color.WHITE);
+//        confirmLabel.setBounds(0, yPos, 320, 25);
+//        formPanel.add(confirmLabel);
+//
+//        JPasswordField confirmField = new JPasswordField();
+//        styleInputField(confirmField);
+//        confirmField.setBounds(0, yPos + 25, 320, 50);
+//        formPanel.add(confirmField);
+//        yPos += 85;
+//
+//        // Register button
+//        JButton registerButton = new JButton("Create Account");
+//        registerButton.setFont(new Font("Arial", Font.BOLD, 18));
+//        registerButton.setBackground(CARD_WHITE);
+//        registerButton.setForeground(SUCCESS_GREEN);
+//        registerButton.setBorder(new EmptyBorder(15, 0, 15, 0));
+//        registerButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//        registerButton.setBounds(0, yPos, 320, 55);
+//
+//        registerButton.addActionListener(e -> {
+//            String fullName = nameField.getText().trim();
+//            String email = emailField.getText().trim();
+//            String phone = phoneField.getText().trim();
+//            String password = new String(passwordField.getPassword());
+//            String confirm = new String(confirmField.getPassword());
+//
+//            if (fullName.isEmpty() || email.isEmpty() || password.isEmpty()) {
+//                showMessage("Please fill required fields", "Error", JOptionPane.ERROR_MESSAGE);
+//                return;
+//            }
+//
+//            if (!password.equals(confirm)) {
+//                showMessage("Passwords do not match", "Error", JOptionPane.ERROR_MESSAGE);
+//                return;
+//            }
+//
+//            if (password.length() < 6) {
+//                showMessage("Password must be at least 6 characters", "Error", JOptionPane.ERROR_MESSAGE);
+//                return;
+//            }
+//
+//            performRegistration(fullName, email, phone, password);
+//        });
+//        formPanel.add(registerButton);
+//
+//        registerPanel.add(formPanel);
+//        contentArea.add(registerPanel, BorderLayout.CENTER);
+//
+//        contentArea.revalidate();
+//        contentArea.repaint();
+//    }
+//
+//    private void styleInputField(JTextField field) {
+//        field.setFont(new Font("Arial", Font.PLAIN, 16));
+//        field.setBorder(new EmptyBorder(15, 20, 15, 20));
+//        field.setBackground(Color.WHITE);
+//        field.setForeground(TEXT_DARK);
+//    }
+//
+//    // AUTHENTICATION - WORKING PERFECTLY
+//    private void performLogin(String email, String password) {
+//        System.out.println("🔄 Login attempt: " + email);
+//
+//        // Show loading
+//        JDialog loading = showLoadingDialog("Signing in...");
+//
+//        SwingWorker<User, Void> worker = new SwingWorker<User, Void>() {
+//            @Override
+//            protected User doInBackground() throws Exception {
+//                Thread.sleep(1000); // Simulate network delay
+//
+//                if (userService == null) {
+//                    throw new Exception("UserService not available");
+//                }
+//
+//                Optional<User> userOpt = userService.authenticateUser(email, password);
+//                return userOpt.orElse(null);
+//            }
+//
+//            @Override
+//            protected void done() {
+//                loading.dispose();
+//                try {
+//                    User user = get();
+//                    if (user != null) {
+//                        currentUser = user;
+//                        System.out.println("✅ Login success: " + user.getFullName());
+//
+//                        showMessage("Welcome back, " + user.getFullName() + "!", "Success", JOptionPane.INFORMATION_MESSAGE);
+//
+//                        // Delay then show chat
+//                        Timer timer = new Timer();
+//                        timer.schedule(new TimerTask() {
+//                            @Override
+//                            public void run() {
+//                                SwingUtilities.invokeLater(() -> showChatScreen());
+//                            }
+//                        }, 1000);
+//
+//                    } else {
+//                        showMessage("Invalid email or password", "Login Failed", JOptionPane.ERROR_MESSAGE);
+//                    }
+//                } catch (Exception e) {
+//                    System.err.println("❌ Login error: " + e.getMessage());
+//                    showMessage("Login failed: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+//                }
+//            }
+//        };
+//        worker.execute();
+//    }
+//
+//    private void performRegistration(String fullName, String email, String phone, String password) {
+//        System.out.println("🔄 Registration attempt: " + email);
+//
+//        JDialog loading = showLoadingDialog("Creating account...");
+//
+//        SwingWorker<User, Void> worker = new SwingWorker<User, Void>() {
+//            @Override
+//            protected User doInBackground() throws Exception {
+//                Thread.sleep(1500); // Simulate processing
+//
+//                if (userService == null) {
+//                    throw new Exception("UserService not available");
+//                }
+//
+//                User user = userService.registerUser(email, password, fullName);
+//                if (!phone.isEmpty()) {
+//                    user.setPhone(phone);
+//                    userService.updateUser(user);
+//                }
+//
+//                return user;
+//            }
+//
+//            @Override
+//            protected void done() {
+//                loading.dispose();
+//                try {
+//                    User user = get();
+//                    currentUser = user;
+//                    System.out.println("✅ Registration success: " + user.getFullName());
+//
+//                    showMessage("Account created successfully!\nWelcome to TeleMedi!", "Registration Complete", JOptionPane.INFORMATION_MESSAGE);
+//
+//                    Timer timer = new Timer();
+//                    timer.schedule(new TimerTask() {
+//                        @Override
+//                        public void run() {
+//                            SwingUtilities.invokeLater(() -> showChatScreen());
+//                        }
+//                    }, 1500);
+//
+//                } catch (Exception e) {
+//                    System.err.println("❌ Registration error: " + e.getMessage());
+//                    String errorMsg = e.getCause() != null ? e.getCause().getMessage() : e.getMessage();
+//                    if (errorMsg.contains("exists")) {
+//                        showMessage("Email already registered. Please use a different email.", "Registration Failed", JOptionPane.ERROR_MESSAGE);
+//                    } else {
+//                        showMessage("Registration failed: " + errorMsg, "Error", JOptionPane.ERROR_MESSAGE);
+//                    }
+//                }
+//            }
+//        };
+//        worker.execute();
+//    }
+//
+//    // CHAT SCREEN - BEAUTIFUL & FUNCTIONAL
+//    private void showChatScreen() {
+//        contentArea.removeAll();
+//
+//        // Create chat layout
+//        JPanel chatContainer = new JPanel(new BorderLayout());
+//        chatContainer.setBackground(BACKGROUND_LIGHT);
+//
+//        // Header
+//        JPanel headerPanel = new JPanel() {
+//            @Override
+//            protected void paintComponent(Graphics g) {
+//                super.paintComponent(g);
+//                Graphics2D g2d = (Graphics2D) g;
+//                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+//
+//                GradientPaint gradient = new GradientPaint(
+//                        0, 0, PRIMARY_BLUE,
+//                        getWidth(), 0, PRIMARY_DARK
+//                );
+//                g2d.setPaint(gradient);
+//                g2d.fillRect(0, 0, getWidth(), getHeight());
+//            }
+//        };
+//        headerPanel.setLayout(new BorderLayout());
+//        headerPanel.setPreferredSize(new Dimension(0, 70));
+//        headerPanel.setBorder(new EmptyBorder(15, 20, 15, 20));
+//
+//        // Header content
+//        JLabel headerTitle = new JLabel("Dr. AI Medical Assistant");
+//        headerTitle.setFont(new Font("Arial", Font.BOLD, 18));
+//        headerTitle.setForeground(Color.WHITE);
+//
+//        JLabel userInfo = new JLabel("Hi, " + (currentUser != null ? currentUser.getFullName().split(" ")[0] : "User"));
+//        userInfo.setFont(new Font("Arial", Font.PLAIN, 14));
+//        userInfo.setForeground(new Color(255, 255, 255, 180));
+//
+//        JPanel headerLeft = new JPanel();
+//        headerLeft.setLayout(new BoxLayout(headerLeft, BoxLayout.Y_AXIS));
+//        headerLeft.setOpaque(false);
+//        headerLeft.add(headerTitle);
+//        headerLeft.add(userInfo);
+//
+//        JButton menuButton = new JButton("⋮");
+//        menuButton.setFont(new Font("Arial", Font.BOLD, 20));
+//        menuButton.setForeground(Color.WHITE);
+//        menuButton.setBorder(null);
+//        menuButton.setContentAreaFilled(false);
+//        menuButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//        menuButton.addActionListener(e -> showUserMenu());
+//
+//        headerPanel.add(headerLeft, BorderLayout.WEST);
+//        headerPanel.add(menuButton, BorderLayout.EAST);
+//
+//        // Chat area
+//        chatContainer.add(headerPanel, BorderLayout.NORTH);
+//        chatContainer.add(scrollPane, BorderLayout.CENTER);
+//
+//        // Input area
+//        JPanel inputPanel = new JPanel(new BorderLayout(10, 10));
+//        inputPanel.setBackground(CARD_WHITE);
+//        inputPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
+//
+//        JPanel typingPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+//        typingPanel.setOpaque(false);
+//        typingPanel.add(typingLabel);
+//
+//        JPanel inputContainer = new JPanel(new BorderLayout(10, 0));
+//        inputContainer.setOpaque(false);
+//        inputContainer.add(messageField, BorderLayout.CENTER);
+//        inputContainer.add(sendButton, BorderLayout.EAST);
+//
+//        inputPanel.add(typingPanel, BorderLayout.NORTH);
+//        inputPanel.add(inputContainer, BorderLayout.CENTER);
+//
+//        chatContainer.add(inputPanel, BorderLayout.SOUTH);
+//
+//        // Setup event handlers
+//        sendButton.addActionListener(e -> sendMessage());
+//        messageField.addActionListener(e -> sendMessage());
+//
+//        contentArea.add(chatContainer, BorderLayout.CENTER);
+//
+//        // Start conversation
+//        startConversation();
+//
+//        contentArea.revalidate();
+//        contentArea.repaint();
+//    }
+//
+//    private void startConversation() {
+//        // Clear chat
+//        chatPanel.removeAll();
+//
+//        // Welcome message
+//        addWelcomeMessage();
+//
+//        // Initialize bot conversation
+//        if (currentUser != null && chatBotService != null) {
+//            showTypingIndicator();
+//
+//            Timer timer = new Timer();
+//            timer.schedule(new TimerTask() {
+//                @Override
+//                public void run() {
+//                    SwingUtilities.invokeLater(() -> {
+//                        hideTypingIndicator();
+//
+//                        QueryRequest request = new QueryRequest(null, "");
+//                        BotResponse response = chatBotService.processQuery(request, currentUser.getEmail());
+//                        currentSessionId = response.getSessionId();
+//
+//                        addBotMessage(response.getMessage());
+//
+//                        if (response.getSuggestions() != null && !response.getSuggestions().isEmpty()) {
+//                            addSuggestionButtons(response.getSuggestions());
+//                        }
+//                    });
+//                }
+//            }, 1500);
+//        }
+//    }
+//
+//    // PERFECTLY ALIGNED WELCOME MESSAGE
+//    private void addWelcomeMessage() {
+//        JPanel container = new JPanel(new BorderLayout());
+//        container.setOpaque(false);
+//        container.setBorder(new EmptyBorder(20, 20, 20, 20));
+//        container.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180)); // Limit height
+//
+//        JPanel welcomePanel = new JPanel();
+//        welcomePanel.setLayout(new BoxLayout(welcomePanel, BoxLayout.Y_AXIS));
+//        welcomePanel.setOpaque(false);
+//
+//        JLabel welcomeIcon = new JLabel("🩺", SwingConstants.CENTER);
+//        welcomeIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 48));
+//        welcomeIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
+//
+//        String firstName = currentUser != null ? currentUser.getFullName().split(" ")[0] : "User";
+//        JLabel welcomeText = new JLabel("Hello " + firstName + "!", SwingConstants.CENTER);
+//        welcomeText.setFont(new Font("Arial", Font.BOLD, 20));
+//        welcomeText.setForeground(TEXT_DARK);
+//        welcomeText.setAlignmentX(Component.CENTER_ALIGNMENT);
+//
+//        JLabel welcomeSubtext = new JLabel("I'm Dr. AI, ready to help with your health concerns", SwingConstants.CENTER);
+//        welcomeSubtext.setFont(new Font("Arial", Font.PLAIN, 14));
+//        welcomeSubtext.setForeground(TEXT_LIGHT);
+//        welcomeSubtext.setAlignmentX(Component.CENTER_ALIGNMENT);
+//
+//        welcomePanel.add(welcomeIcon);
+//        welcomePanel.add(Box.createVerticalStrut(12));
+//        welcomePanel.add(welcomeText);
+//        welcomePanel.add(Box.createVerticalStrut(6));
+//        welcomePanel.add(welcomeSubtext);
+//
+//        container.add(welcomePanel, BorderLayout.CENTER);
+//
+//        chatPanel.add(container);
+//        chatPanel.add(Box.createVerticalStrut(15));
+//        refreshChat();
+//    }
+//
+//    private void showTypingIndicator() {
+//        typingLabel.setText("🤖 Dr. AI is thinking...");
+//    }
+//
+//    private void hideTypingIndicator() {
+//        typingLabel.setText(" ");
+//    }
+//
+//    private void sendMessage() {
+//        String message = messageField.getText().trim();
+//        if (message.isEmpty()) return;
+//
+//        // Add user message
+//        addUserMessage(message);
+//        messageField.setText("");
+//        sendButton.setEnabled(false);
+//
+//        showTypingIndicator();
+//
+//        Timer timer = new Timer();
+//        timer.schedule(new TimerTask() {
+//            @Override
+//            public void run() {
+//                SwingUtilities.invokeLater(() -> {
+//                    hideTypingIndicator();
+//
+//                    if (chatBotService != null && currentUser != null) {
+//                        QueryRequest request = new QueryRequest(currentSessionId, message);
+//                        BotResponse response = chatBotService.processQuery(request, currentUser.getEmail());
+//
+//                        addBotMessage(response.getMessage());
+//
+//                        if (response.getRemedy() != null && !response.getRemedy().isEmpty()) {
+//                            addRemedyCard(response.getRemedy());
+//                        }
+//
+//                        if (response.getSuggestions() != null && !response.getSuggestions().isEmpty()) {
+//                            addSuggestionButtons(response.getSuggestions());
+//                        }
+//
+//                        if (response.isConversationEnd()) {
+//                            addSystemMessage("Consultation completed! 🎉");
+//                            addNewChatButton();
+//                        }
+//                    } else {
+//                        addBotMessage("Sorry, I'm having trouble connecting. Please try again.");
+//                    }
+//
+//                    sendButton.setEnabled(true);
+//                });
+//            }
+//        }, 1000 + (int)(Math.random() * 1000));
+//    }
+//
+//    // PERFECTLY ALIGNED USER MESSAGE (RIGHT SIDE)
+//    private void addUserMessage(String message) {
+//        JPanel container = new JPanel(new BorderLayout());
+//        container.setOpaque(false);
+//        container.setBorder(new EmptyBorder(5, 100, 5, 16)); // Force right alignment
+//        container.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100)); // IMPORTANT: Limit height
+//
+//        JLabel messageLabel = new JLabel("<html><div style='max-width: 180px; word-wrap: break-word;'>" + message + "</div></html>");
+//        messageLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+//        messageLabel.setForeground(Color.WHITE);
+//        messageLabel.setOpaque(true);
+//        messageLabel.setBackground(PRIMARY_BLUE);
+//        messageLabel.setBorder(new EmptyBorder(12, 16, 12, 16));
+//
+//        container.add(messageLabel, BorderLayout.EAST);
+//
+//        chatPanel.add(container);
+//        chatPanel.add(Box.createVerticalStrut(8));
+//        refreshChat();
+//    }
+//
+//    // PERFECTLY ALIGNED BOT MESSAGE (LEFT SIDE)
+//    private void addBotMessage(String message) {
+//        JPanel container = new JPanel(new BorderLayout());
+//        container.setOpaque(false);
+//        container.setBorder(new EmptyBorder(5, 16, 5, 100)); // Force left alignment
+//        container.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120)); // IMPORTANT: Limit height
+//
+//        JPanel leftContent = new JPanel(new BorderLayout(10, 0));
+//        leftContent.setOpaque(false);
+//
+//        JLabel avatar = new JLabel("🤖");
+//        avatar.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 18));
+//        avatar.setVerticalAlignment(SwingConstants.TOP);
+//
+//        JLabel messageLabel = new JLabel("<html><div style='max-width: 200px; word-wrap: break-word;'>" + message + "</div></html>");
+//        messageLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+//        messageLabel.setForeground(TEXT_DARK);
+//        messageLabel.setOpaque(true);
+//        messageLabel.setBackground(CARD_WHITE);
+//        messageLabel.setBorder(BorderFactory.createCompoundBorder(
+//                BorderFactory.createLineBorder(new Color(220, 220, 220), 1),
+//                new EmptyBorder(12, 16, 12, 16)
+//        ));
+//
+//        leftContent.add(avatar, BorderLayout.WEST);
+//        leftContent.add(messageLabel, BorderLayout.CENTER);
+//
+//        container.add(leftContent, BorderLayout.WEST);
+//
+//        chatPanel.add(container);
+//        chatPanel.add(Box.createVerticalStrut(8));
+//        refreshChat();
+//    }
+//
+//    // PERFECTLY CENTERED REMEDY CARD
+//    private void addRemedyCard(String remedy) {
+//        JPanel container = new JPanel(new BorderLayout());
+//        container.setOpaque(false);
+//        container.setBorder(new EmptyBorder(10, 30, 10, 30)); // Equal margins
+//        container.setMaximumSize(new Dimension(Integer.MAX_VALUE, 150)); // Limit height
+//
+//        JLabel remedyCard = new JLabel("<html><div style='width: 240px; word-wrap: break-word; padding: 8px;'><b>💊 Treatment:</b><br><br>" + remedy + "</div></html>");
+//        remedyCard.setFont(new Font("Arial", Font.PLAIN, 14));
+//        remedyCard.setForeground(Color.WHITE);
+//        remedyCard.setOpaque(true);
+//        remedyCard.setBackground(SUCCESS_GREEN);
+//        remedyCard.setBorder(new EmptyBorder(16, 20, 16, 20));
+//
+//        container.add(remedyCard, BorderLayout.CENTER);
+//
+//        chatPanel.add(container);
+//        chatPanel.add(Box.createVerticalStrut(12));
+//        refreshChat();
+//    }
+//
+//    // PERFECTLY ALIGNED SUGGESTION BUTTONS (LEFT SIDE)
+//    private void addSuggestionButtons(List<String> suggestions) {
+//        // Label container
+//        JPanel labelContainer = new JPanel(new BorderLayout());
+//        labelContainer.setOpaque(false);
+//        labelContainer.setBorder(new EmptyBorder(5, 60, 5, 100)); // Align with bot messages
+//        labelContainer.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+//
+//        JLabel label = new JLabel("💡 Quick options:");
+//        label.setFont(new Font("Arial", Font.BOLD, 13));
+//        label.setForeground(TEXT_LIGHT);
+//
+//        labelContainer.add(label, BorderLayout.WEST);
+//        chatPanel.add(labelContainer);
+//
+//        // Buttons container
+//        JPanel buttonContainer = new JPanel(new BorderLayout());
+//        buttonContainer.setOpaque(false);
+//        buttonContainer.setBorder(new EmptyBorder(0, 60, 12, 100)); // Same alignment
+//        buttonContainer.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
+//
+//        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+//        buttonPanel.setOpaque(false);
+//
+//        for (String suggestion : suggestions) {
+//            JButton chip = new JButton(suggestion);
+//            chip.setFont(new Font("Arial", Font.PLAIN, 12));
+//            chip.setBackground(new Color(235, 235, 235));
+//            chip.setForeground(TEXT_DARK);
+//            chip.setBorder(new EmptyBorder(6, 12, 6, 12));
+//            chip.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//            chip.setFocusPainted(false);
+//
+//            chip.addActionListener(e -> {
+//                messageField.setText(suggestion);
+//                sendMessage();
+//            });
+//
+//            buttonPanel.add(chip);
+//        }
+//
+//        buttonContainer.add(buttonPanel, BorderLayout.WEST);
+//        chatPanel.add(buttonContainer);
+//        chatPanel.add(Box.createVerticalStrut(8));
+//        refreshChat();
+//    }
+//
+//    private void addSystemMessage(String message) {
+//        JPanel systemPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+//        systemPanel.setOpaque(false);
+//
+//        JLabel systemLabel = new JLabel(message);
+//        systemLabel.setFont(new Font("Arial", Font.ITALIC, 13));
+//        systemLabel.setForeground(TEXT_LIGHT);
+//
+//        systemPanel.add(systemLabel);
+//        chatPanel.add(systemPanel);
+//        chatPanel.add(Box.createVerticalStrut(10));
+//        refreshChat();
+//    }
+//
+//    private void addNewChatButton() {
+//        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+//        buttonPanel.setOpaque(false);
+//
+//        JButton newChatBtn = new JButton("🔄 Start New Consultation");
+//        newChatBtn.setFont(new Font("Arial", Font.BOLD, 14));
+//        newChatBtn.setBackground(PRIMARY_BLUE);
+//        newChatBtn.setForeground(Color.WHITE);
+//        newChatBtn.setBorder(new EmptyBorder(12, 24, 12, 24));
+//        newChatBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+//        newChatBtn.setFocusPainted(false);
+//
+//        newChatBtn.addActionListener(e -> startConversation());
+//
+//        buttonPanel.add(newChatBtn);
+//        chatPanel.add(buttonPanel);
+//        refreshChat();
+//    }
+//
+//    // FIXED - Proper refresh with correct revalidation order
+//    private void refreshChat() {
+//        // PROPER revalidation order
+//        SwingUtilities.invokeLater(() -> {
+//            chatPanel.revalidate();
+//            chatPanel.repaint();
+//            scrollPane.revalidate();
+//            scrollPane.repaint();
+//
+//            // Force proper scrolling
+//            Timer scrollTimer = new Timer();
+//            scrollTimer.schedule(new TimerTask() {
+//                @Override
+//                public void run() {
+//                    SwingUtilities.invokeLater(() -> {
+//                        JScrollBar scrollBar = scrollPane.getVerticalScrollBar();
+//                        scrollBar.setValue(scrollBar.getMaximum());
+//                    });
+//                }
+//            }, 50); // Small delay for layout to complete
+//        });
+//    }
+//
+//    // FIXED USER MENU WITH WORKING CHAT HISTORY
+//    private void showUserMenu() {
+//        JPopupMenu menu = new JPopupMenu();
+//
+//        JMenuItem profileItem = new JMenuItem("👤 My Profile");
+//        profileItem.setFont(new Font("Arial", Font.PLAIN, 14));
+//        profileItem.addActionListener(e -> showUserProfile());
+//
+//        JMenuItem historyItem = new JMenuItem("📋 Chat History");
+//        historyItem.setFont(new Font("Arial", Font.PLAIN, 14));
+//        historyItem.addActionListener(e -> showChatHistory()); // FIXED - Now working!
+//
+//        JMenuItem logoutItem = new JMenuItem("🚪 Sign Out");
+//        logoutItem.setFont(new Font("Arial", Font.PLAIN, 14));
+//        logoutItem.addActionListener(e -> logout());
+//
+//        menu.add(profileItem);
+//        menu.add(historyItem);
+//        menu.addSeparator();
+//        menu.add(logoutItem);
+//
+//        // Show menu near the button
+//        menu.show(this, getWidth() - 150, 80);
+//    }
+//
+//    // COMPLETE WORKING CHAT HISTORY IMPLEMENTATION
+//    private void showChatHistory() {
+//        if (currentUser == null) return;
+//
+//        try {
+//            // Get chat history from service
+//            java.util.List<com.example.Telemedi.entity.ChatSession> sessions =
+//                    chatBotService.getUserChatHistory(currentUser.getEmail());
+//
+//            if (sessions.isEmpty()) {
+//                showMessage("No chat history found. Start a conversation to build your history!",
+//                        "Chat History", JOptionPane.INFORMATION_MESSAGE);
+//                return;
+//            }
+//
+//            // Create history dialog
+//            JDialog historyDialog = new JDialog(this, "Chat History", true);
+//            historyDialog.setSize(500, 400);
+//            historyDialog.setLocationRelativeTo(this);
+//
+//            // Create list model
+//            DefaultListModel<String> listModel = new DefaultListModel<>();
+//            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm");
+//
+//            for (com.example.Telemedi.entity.ChatSession session : sessions) {
+//                String sessionInfo = String.format("📋 %s - %s%s",
+//                        session.getSessionTitle(),
+//                        session.getCreatedAt().format(formatter),
+//                        session.getIsCompleted() ? " ✅" : " ⏳"
+//                );
+//                listModel.addElement(sessionInfo);
+//            }
+//
+//            JList<String> historyList = new JList<>(listModel);
+//            historyList.setFont(new Font("Arial", Font.PLAIN, 14));
+//            historyList.setBorder(new EmptyBorder(10, 10, 10, 10));
+//            historyList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+//
+//            // Add double-click to view session
+//            historyList.addMouseListener(new java.awt.event.MouseAdapter() {
+//                public void mouseClicked(java.awt.event.MouseEvent evt) {
+//                    if (evt.getClickCount() == 2) {
+//                        int index = historyList.getSelectedIndex();
+//                        if (index >= 0 && index < sessions.size()) {
+//                            viewChatSession(sessions.get(index));
+//                        }
+//                    }
+//                }
+//            });
+//
+//            JScrollPane scrollPane = new JScrollPane(historyList);
+//
+//            // Header
+//            JPanel headerPanel = new JPanel(new BorderLayout());
+//            headerPanel.setBorder(new EmptyBorder(15, 15, 10, 15));
+//            headerPanel.setBackground(PRIMARY_BLUE);
+//
+//            JLabel headerLabel = new JLabel("Your Chat History (" + sessions.size() + " sessions)");
+//            headerLabel.setFont(new Font("Arial", Font.BOLD, 16));
+//            headerLabel.setForeground(Color.WHITE);
+//
+//            JLabel instructionLabel = new JLabel("Double-click a session to view details");
+//            instructionLabel.setFont(new Font("Arial", Font.PLAIN, 12));
+//            instructionLabel.setForeground(new Color(255, 255, 255, 180));
+//
+//            headerPanel.add(headerLabel, BorderLayout.NORTH);
+//            headerPanel.add(instructionLabel, BorderLayout.SOUTH);
+//
+//            // Footer buttons
+//            JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+//
+//            JButton closeButton = new JButton("Close");
+//            closeButton.setFont(new Font("Arial", Font.PLAIN, 14));
+//            closeButton.addActionListener(e -> historyDialog.dispose());
+//
+//            JButton refreshButton = new JButton("🔄 Refresh");
+//            refreshButton.setFont(new Font("Arial", Font.PLAIN, 14));
+//            refreshButton.addActionListener(e -> {
+//                historyDialog.dispose();
+//                showChatHistory(); // Refresh
+//            });
+//
+//            buttonPanel.add(refreshButton);
+//            buttonPanel.add(closeButton);
+//
+//            historyDialog.setLayout(new BorderLayout());
+//            historyDialog.add(headerPanel, BorderLayout.NORTH);
+//            historyDialog.add(scrollPane, BorderLayout.CENTER);
+//            historyDialog.add(buttonPanel, BorderLayout.SOUTH);
+//
+//            historyDialog.setVisible(true);
+//
+//        } catch (Exception e) {
+//            System.err.println("Error loading chat history: " + e.getMessage());
+//            showMessage("Unable to load chat history. Please try again.",
+//                    "Error", JOptionPane.ERROR_MESSAGE);
+//        }
+//    }
+//
+//    // VIEW INDIVIDUAL CHAT SESSION DETAILS
+//    private void viewChatSession(com.example.Telemedi.entity.ChatSession session) {
+//        try {
+//            java.util.List<com.example.Telemedi.entity.ChatMessage> messages =
+//                    chatBotService.getSessionMessages(session.getSessionId(), currentUser.getEmail());
+//
+//            if (messages.isEmpty()) {
+//                showMessage("No messages found in this session.", "Session Details", JOptionPane.INFORMATION_MESSAGE);
+//                return;
+//            }
+//
+//            // Create session view dialog
+//            JDialog sessionDialog = new JDialog(this, "Chat Session Details", true);
+//            sessionDialog.setSize(600, 500);
+//            sessionDialog.setLocationRelativeTo(this);
+//
+//            // Create messages display
+//            JTextArea messagesArea = new JTextArea();
+//            messagesArea.setEditable(false);
+//            messagesArea.setFont(new Font("Arial", Font.PLAIN, 13));
+//            messagesArea.setBorder(new EmptyBorder(15, 15, 15, 15));
+//            messagesArea.setBackground(BACKGROUND_LIGHT);
+//
+//            StringBuilder sessionText = new StringBuilder();
+//            DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("HH:mm");
+//
+//            sessionText.append("📋 Session: ").append(session.getSessionTitle()).append("\n");
+//            sessionText.append("🕒 Date: ").append(session.getCreatedAt().format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))).append("\n");
+//            sessionText.append("📊 Status: ").append(session.getIsCompleted() ? "Completed ✅" : "In Progress ⏳").append("\n\n");
+//            sessionText.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+//
+//            for (com.example.Telemedi.entity.ChatMessage message : messages) {
+//                String sender = message.getSenderType().toString().equals("user") ? "You" : "Dr. AI";
+//                String time = message.getTimestamp().format(timeFormatter);
+//
+//                if (message.getSenderType().toString().equals("user")) {
+//                    sessionText.append("👤 You (").append(time).append("):\n");
+//                } else {
+//                    sessionText.append("🤖 Dr. AI (").append(time).append("):\n");
+//                }
+//
+//                sessionText.append(message.getMessageText()).append("\n");
+//
+//                if (message.getRemedyText() != null && !message.getRemedyText().isEmpty()) {
+//                    sessionText.append("\n💊 Treatment Recommendation:\n");
+//                    sessionText.append(message.getRemedyText()).append("\n");
+//                }
+//
+//                sessionText.append("\n");
+//            }
+//
+//            messagesArea.setText(sessionText.toString());
+//            messagesArea.setCaretPosition(0); // Scroll to top
+//
+//            JScrollPane scrollPane = new JScrollPane(messagesArea);
+//            scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+//
+//            // Header
+//            JPanel headerPanel = new JPanel(new BorderLayout());
+//            headerPanel.setBorder(new EmptyBorder(15, 15, 10, 15));
+//            headerPanel.setBackground(SUCCESS_GREEN);
+//
+//            JLabel headerLabel = new JLabel("Chat Session Details");
+//            headerLabel.setFont(new Font("Arial", Font.BOLD, 16));
+//            headerLabel.setForeground(Color.WHITE);
+//
+//            headerPanel.add(headerLabel, BorderLayout.CENTER);
+//
+//            // Footer
+//            JPanel footerPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+//
+//            JButton closeButton = new JButton("Close");
+//            closeButton.setFont(new Font("Arial", Font.PLAIN, 14));
+//            closeButton.addActionListener(e -> sessionDialog.dispose());
+//
+//            footerPanel.add(closeButton);
+//
+//            sessionDialog.setLayout(new BorderLayout());
+//            sessionDialog.add(headerPanel, BorderLayout.NORTH);
+//            sessionDialog.add(scrollPane, BorderLayout.CENTER);
+//            sessionDialog.add(footerPanel, BorderLayout.SOUTH);
+//
+//            sessionDialog.setVisible(true);
+//
+//        } catch (Exception e) {
+//            System.err.println("Error viewing session: " + e.getMessage());
+//            showMessage("Unable to load session details. Please try again.",
+//                    "Error", JOptionPane.ERROR_MESSAGE);
+//        }
+//    }
+//
+//    private void showUserProfile() {
+//        if (currentUser != null) {
+//            String info = String.format(
+//                    "👤 User Profile\n\n" +
+//                            "Name: %s\n" +
+//                            "Email: %s\n" +
+//                            "Phone: %s\n" +
+//                            "Member since: %s",
+//                    currentUser.getFullName(),
+//                    currentUser.getEmail(),
+//                    currentUser.getPhone() != null ? currentUser.getPhone() : "Not provided",
+//                    currentUser.getCreatedAt() != null ? currentUser.getCreatedAt().toLocalDate() : "Unknown"
+//            );
+//
+//            showMessage(info, "Profile Information", JOptionPane.INFORMATION_MESSAGE);
+//        }
+//    }
+//
+//    private void logout() {
+//        int result = JOptionPane.showConfirmDialog(
+//                this,
+//                "Are you sure you want to sign out?",
+//                "Confirm Logout",
+//                JOptionPane.YES_NO_OPTION,
+//                JOptionPane.QUESTION_MESSAGE
+//        );
+//
+//        if (result == JOptionPane.YES_OPTION) {
+//            currentUser = null;
+//            currentSessionId = null;
+//            showLoginScreen();
+//        }
+//    }
+//
+//    // UTILITY METHODS
+//    private JDialog showLoadingDialog(String message) {
+//        JDialog dialog = new JDialog(this, "Please Wait", true);
+//        dialog.setUndecorated(true);
+//
+//        JPanel panel = new JPanel(new BorderLayout(20, 20));
+//        panel.setBorder(BorderFactory.createCompoundBorder(
+//                BorderFactory.createLineBorder(new Color(200, 200, 200), 1),
+//                new EmptyBorder(30, 40, 30, 40)
+//        ));
+//        panel.setBackground(Color.WHITE);
+//
+//        JLabel icon = new JLabel("⏳");
+//        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 28));
+//
+//        JLabel text = new JLabel(message);
+//        text.setFont(new Font("Arial", Font.PLAIN, 16));
+//        text.setForeground(TEXT_DARK);
+//
+//        panel.add(icon, BorderLayout.WEST);
+//        panel.add(text, BorderLayout.CENTER);
+//
+//        dialog.add(panel);
+//        dialog.pack();
+//        dialog.setLocationRelativeTo(this);
+//
+//        // Show dialog in background thread
+//        SwingUtilities.invokeLater(() -> dialog.setVisible(true));
+//
+//        return dialog;
+//    }
+//
+//    private void showMessage(String message, String title, int messageType) {
+//        SwingUtilities.invokeLater(() -> {
+//            JOptionPane.showMessageDialog(this, message, title, messageType);
+//        });
+//    }
+//}

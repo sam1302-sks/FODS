@@ -136,9 +136,31 @@ public class ConversationalTrie {
             return null;
         }
 
-        String[] words = userInput.toLowerCase().trim().split("\\s+");
+        String input = userInput.toLowerCase().trim();
+        String[] words = input.split("\\s+");
 
-        // Direct match first
+        // First try exact phrase match
+        TrieNode exactMatch = currentNode.getChild(input);
+        if (exactMatch != null) {
+            return exactMatch;
+        }
+
+        // Then try multi-word combinations
+        for (int i = words.length; i > 0; i--) {
+            for (int j = 0; j <= words.length - i; j++) {
+                StringBuilder phrase = new StringBuilder();
+                for (int k = j; k < j + i; k++) {
+                    if (k > j) phrase.append(" ");
+                    phrase.append(words[k]);
+                }
+                TrieNode match = currentNode.getChild(phrase.toString());
+                if (match != null) {
+                    return match;
+                }
+            }
+        }
+
+        // Then try individual words (existing logic)
         for (String word : words) {
             TrieNode match = currentNode.getChild(word);
             if (match != null) {
@@ -146,7 +168,7 @@ public class ConversationalTrie {
             }
         }
 
-        // Fuzzy matching for common variations
+        // Fuzzy matching as fallback
         for (String word : words) {
             for (String keyword : currentNode.getChildren().keySet()) {
                 if (isCloseMatch(word, keyword)) {
