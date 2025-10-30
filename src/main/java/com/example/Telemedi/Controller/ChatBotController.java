@@ -83,6 +83,24 @@ public class ChatBotController {
         }
     }
 
+    @DeleteMapping("/session/{sessionId}")
+    public ResponseEntity<?> deleteSession(@PathVariable String sessionId) {
+        try {
+            System.out.println("🗑️ Deleting session: " + sessionId);
+            boolean success = chatBotService.deleteChatSessionById(sessionId);
+            if (success) {
+                System.out.println("✅ Session deleted successfully");
+                return ResponseEntity.ok().build();
+            } else {
+                System.out.println("❌ Failed to delete session");
+                return ResponseEntity.status(404).body("Session not found");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Failed to delete session: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/session/{sessionId}/messages/{email}")
     public ResponseEntity<List<ChatMessage>> getSessionMessages(
             @PathVariable String sessionId,

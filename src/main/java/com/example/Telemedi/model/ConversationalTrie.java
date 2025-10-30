@@ -8,7 +8,7 @@ public class ConversationalTrie {
     private TrieNode root;
 
     public ConversationalTrie() {
-        this.root = new TrieNode("Hello! I'm your medical how are you today? feeling well?");
+        this.root = new TrieNode("Hello! I'm your medical assistant. How are you feeling today?");
         buildMedicalDialogue();
     }
 

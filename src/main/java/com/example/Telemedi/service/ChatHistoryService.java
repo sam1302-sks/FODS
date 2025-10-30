@@ -45,7 +45,6 @@ public class ChatHistoryService {
             try {
                 message.setSuggestions(objectMapper.writeValueAsString(suggestions));
             } catch (JsonProcessingException e) {
-                // Handle JSON serialization error
                 message.setSuggestions(null);
             }
         }
@@ -104,5 +103,9 @@ public class ChatHistoryService {
 
     public long getUserTotalMessages(ChatSession session) {
         return chatMessageRepository.countMessagesBySession(session);
+    }
+    @Transactional
+    public void deleteSessionById(String sessionId) {
+        chatSessionRepository.deleteById(sessionId);
     }
 }

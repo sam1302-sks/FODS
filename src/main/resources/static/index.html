@@ -56,6 +56,72 @@
             background: linear-gradient(135deg, var(--primary-blue), var(--success-green));
             transition: opacity var(--transition-speed) ease;
         }
+        /* History item styling */
+        .history-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid var(--primary-blue);
+        }
+
+        .history-item-content {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .history-date {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .history-diagnosis {
+            font-size: 14px;
+            color: #fff;
+            line-height: 1.4;
+        }
+
+        .history-buttons {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .history-btn {
+            flex: 1;
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .load-btn {
+            background: #007bff;
+            color: white;
+        }
+
+        .load-btn:hover {
+            background: #0056b3;
+        }
+
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+        }
+
+        .empty-history {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+        }
+
 
         .auth-container {
             background: white;
@@ -1081,7 +1147,7 @@
     function openChatHistory() {
         historyPanel.classList.add('open');
         overlay.classList.add('active');
-        renderHistoryPanel();
+        loadUserSessions();
     }
 
     // Close chat history panel
@@ -1332,20 +1398,59 @@
     }
 
     // Load user chat sessions from backend
+    // Load user's chat history
     async function loadUserSessions() {
+        if (!currentUser || !currentUser.email) return;
+
         try {
             const encodedEmail = encodeURIComponent(currentUser.email);
             const response = await fetch(`${CHAT_API_URL}/history/${encodedEmail}`);
 
             if (response.ok) {
-                chatSessions = await response.json();
-                console.log('✅ Loaded sessions:', chatSessions.length);
+                const sessions = await response.json();
+                displayChatHistory(sessions);
             } else {
                 console.error('Failed to load chat history');
             }
         } catch (error) {
-            console.error('Error loading chat history:', error);
+            console.error('Failed to load chat history:', error);
         }
+    }
+
+    // Display chat history in sidebar
+    // Display chat history in sidebar
+    function displayChatHistory(sessions) {
+        historyContent.innerHTML = '';
+
+        if (!sessions || sessions.length === 0) {
+            historyContent.innerHTML = '<div class="empty-history">No chat history yet</div>';
+            return;
+        }
+
+        sessions.forEach(session => {
+            const historyItem = document.createElement('div');
+            historyItem.className = 'history-item';
+
+            const date = new Date(session.createdAt);
+            const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            historyItem.innerHTML = `
+            <div class="history-item-content">
+                <div class="history-date">${dateStr}</div>
+                <div class="history-diagnosis">${session.diagnosis || 'New conversation'}</div>
+                <div class="history-buttons">
+                    <button class="history-btn load-btn" onclick="loadSessionMessages('${session.sessionId}')">
+                        📂 Load
+                    </button>
+                    <button class="history-btn delete-btn" onclick="deleteSession('${session.sessionId}')">
+                        🗑️ Delete
+                    </button>
+                </div>
+            </div>
+        `;
+
+            historyContent.appendChild(historyItem);
+        });
     }
 
 
@@ -1378,6 +1483,68 @@
         } catch (error) {
             console.error('Error loading session:', error);
             showError('Failed to load chat session');
+        }
+    }
+    // Delete a chat session
+    async function deleteSession(sessionId) {
+        if (!confirm('Are you sure you want to delete this conversation?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`${CHAT_API_URL}/session/${sessionId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                // Reload the history list
+                loadUserSessions();
+                alert('Session deleted successfully!');
+            } else {
+                alert('Failed to delete session');
+            }
+        } catch (error) {
+            console.error('Error deleting session:', error);
+            alert('Error deleting session');
+        }
+    }
+    // Load messages from a specific session
+    async function loadSessionMessages(sessionId) {
+        if (!currentUser || !currentUser.email) return;
+
+        try {
+            const encodedEmail = encodeURIComponent(currentUser.email);
+            const response = await fetch(`${CHAT_API_URL}/session/${sessionId}/messages/${encodedEmail}`);
+
+            if (response.ok) {
+                const messages = await response.json();
+
+                // Clear current chat
+                chatArea.innerHTML = '';
+                currentSessionId = null; // Start fresh session for new chats
+
+                // Display all loaded messages
+                messages.forEach(msg => {
+                    if (msg.senderType === 'user') {
+                        addUserMessage(msg.messageText);
+                    } else {
+                        addBotMessage(msg.messageText);
+                        if (msg.remedyText) {
+                            addRemedyMessage(msg.remedyText);
+                        }
+                    }
+                });
+
+                // Close history panel
+                historyPanel.classList.remove('active');
+
+                scrollToBottom();
+            } else {
+                alert('Failed to load session messages');
+            }
+        } catch (error) {
+            console.error('Error loading session messages:', error);
+            alert('Error loading session messages');
         }
     }
 
