@@ -1,18 +1,15 @@
 package com.example.Telemedi.model;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class TrieNode {
-    private Map<String, TrieNode> children;
+    private CustomMap<String, TrieNode> children;
     private String response;
     private String remedy;
-    private List<String> suggestions;
+    private CustomList<String> suggestions;
     private boolean isEndNode;
 
     public TrieNode() {
-        this.children = new HashMap<>();
+        this.children = new CustomMap<>();
+        this.suggestions = new CustomList<>();
         this.isEndNode = false;
     }
 
@@ -21,12 +18,8 @@ public class TrieNode {
         this.response = response;
     }
 
-    public Map<String, TrieNode> getChildren() {
+    public CustomMap<String, TrieNode> getChildren() {
         return children;
-    }
-
-    public void setChildren(Map<String, TrieNode> children) {
-        this.children = children;
     }
 
     public String getResponse() {
@@ -45,12 +38,16 @@ public class TrieNode {
         this.remedy = remedy;
     }
 
-    public List<String> getSuggestions() {
-        return suggestions;
+    public java.util.List<String> getSuggestions() {
+        return suggestions != null ? suggestions.toJavaList() : new java.util.ArrayList<>();
     }
 
-    public void setSuggestions(List<String> suggestions) {
+    public void setSuggestions(CustomList<String> suggestions) {
         this.suggestions = suggestions;
+    }
+
+    public void setSuggestionsArray(String[] suggestionsArray) {
+        this.suggestions = new CustomList<>(suggestionsArray);
     }
 
     public boolean isEndNode() {

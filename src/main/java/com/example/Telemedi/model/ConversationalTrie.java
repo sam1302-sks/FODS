@@ -1,7 +1,6 @@
 package com.example.Telemedi.model;
 
 import org.springframework.stereotype.Component;
-import java.util.*;
 
 @Component
 public class ConversationalTrie {
@@ -15,13 +14,12 @@ public class ConversationalTrie {
     private void buildMedicalDialogue() {
         // Headache branch
         TrieNode headacheNode = new TrieNode("You mentioned a headache. Can you describe the type of pain?");
-        headacheNode.setSuggestions(Arrays.asList("throbbing", "dull", "sharp", "pressure"));
+        headacheNode.setSuggestionsArray(new String[]{"throbbing", "dull", "sharp", "pressure"});
         root.addChild("headache", headacheNode);
         root.addChild("head", headacheNode);
 
-        // Throbbing headache
         TrieNode throbbingNode = new TrieNode("A throbbing headache noted. Do you experience sensitivity to light or sound?");
-        throbbingNode.setSuggestions(Arrays.asList("yes", "no", "light sensitive", "sound sensitive"));
+        throbbingNode.setSuggestionsArray(new String[]{"yes", "no", "light sensitive", "sound sensitive"});
         headacheNode.addChild("throbbing", throbbingNode);
 
         TrieNode migraineLikelyNode = new TrieNode("This sounds like a migraine headache.");
@@ -35,13 +33,11 @@ public class ConversationalTrie {
         tensionHeadacheNode.setEndNode(true);
         throbbingNode.addChild("no", tensionHeadacheNode);
 
-        // Dull headache
         TrieNode dullHeadacheNode = new TrieNode("A dull headache can indicate tension or dehydration.");
         dullHeadacheNode.setRemedy("Take Paracetamol 500mg. Drink plenty of water. Get adequate rest. Practice neck stretches.");
         dullHeadacheNode.setEndNode(true);
         headacheNode.addChild("dull", dullHeadacheNode);
 
-        // Sharp headache
         TrieNode sharpHeadacheNode = new TrieNode("Sharp, sudden headaches can be concerning.");
         sharpHeadacheNode.setRemedy("Take Ibuprofen 400mg. If severe or persistent, consult a doctor immediately.");
         sharpHeadacheNode.setEndNode(true);
@@ -49,7 +45,7 @@ public class ConversationalTrie {
 
         // Fever branch
         TrieNode feverNode = new TrieNode("You have a fever. What is your temperature range?");
-        feverNode.setSuggestions(Arrays.asList("high fever", "low fever", "moderate", "above 102", "below 100"));
+        feverNode.setSuggestionsArray(new String[]{"high fever", "low fever", "moderate", "above 102", "below 100"});
         root.addChild("fever", feverNode);
         root.addChild("temperature", feverNode);
 
@@ -67,7 +63,7 @@ public class ConversationalTrie {
 
         // Cough branch
         TrieNode coughNode = new TrieNode("You have a cough. Is it a dry cough or are you bringing up phlegm?");
-        coughNode.setSuggestions(Arrays.asList("dry cough", "wet cough", "with phlegm", "no phlegm"));
+        coughNode.setSuggestionsArray(new String[]{"dry cough", "wet cough", "with phlegm", "no phlegm"});
         root.addChild("cough", coughNode);
         root.addChild("coughing", coughNode);
 
@@ -86,7 +82,7 @@ public class ConversationalTrie {
 
         // Stomach pain branch
         TrieNode stomachNode = new TrieNode("You're experiencing stomach pain. Is it cramping, burning, or sharp pain?");
-        stomachNode.setSuggestions(Arrays.asList("cramping", "burning", "sharp pain", "bloating"));
+        stomachNode.setSuggestionsArray(new String[]{"cramping", "burning", "sharp pain", "bloating"});
         root.addChild("stomach", stomachNode);
         root.addChild("stomachache", stomachNode);
         root.addChild("abdominal", stomachNode);
@@ -109,7 +105,7 @@ public class ConversationalTrie {
 
         // Body ache branch
         TrieNode bodyAcheNode = new TrieNode("Body aches can be due to various reasons. Do you also have fever?");
-        bodyAcheNode.setSuggestions(Arrays.asList("with fever", "no fever", "muscle pain", "joint pain"));
+        bodyAcheNode.setSuggestionsArray(new String[]{"with fever", "no fever", "muscle pain", "joint pain"});
         root.addChild("body", bodyAcheNode);
         root.addChild("bodyache", bodyAcheNode);
         root.addChild("ache", bodyAcheNode);
@@ -132,20 +128,18 @@ public class ConversationalTrie {
     }
 
     public TrieNode findBestMatch(TrieNode currentNode, String userInput) {
-        if (userInput == null || userInput.trim().isEmpty()) {
+        if (userInput == null || userInput.trim().isEmpty() || userInput.length() < 2) {
             return null;
         }
 
         String input = userInput.toLowerCase().trim();
         String[] words = input.split("\\s+");
 
-        // First try exact phrase match
+        // Exact phrase match
         TrieNode exactMatch = currentNode.getChild(input);
-        if (exactMatch != null) {
-            return exactMatch;
-        }
+        if (exactMatch != null) return exactMatch;
 
-        // Then try multi-word combinations
+        // Multi-word combinations
         for (int i = words.length; i > 0; i--) {
             for (int j = 0; j <= words.length - i; j++) {
                 StringBuilder phrase = new StringBuilder();
@@ -154,35 +148,28 @@ public class ConversationalTrie {
                     phrase.append(words[k]);
                 }
                 TrieNode match = currentNode.getChild(phrase.toString());
-                if (match != null) {
-                    return match;
-                }
+                if (match != null) return match;
             }
         }
 
-        // Then try individual words (existing logic)
+        // Single-word matches
         for (String word : words) {
             TrieNode match = currentNode.getChild(word);
-            if (match != null) {
-                return match;
-            }
+            if (match != null) return match;
         }
 
-        // Fuzzy matching as fallback
+        // Fuzzy matching
         for (String word : words) {
+            if (word.length() < 3) continue;
             for (String keyword : currentNode.getChildren().keySet()) {
-                if (isCloseMatch(word, keyword)) {
+                double similarity = getSimilarity(word, keyword);
+                if (similarity > 0.7) {
                     return currentNode.getChild(keyword);
                 }
             }
         }
 
         return null;
-    }
-
-    private boolean isCloseMatch(String word1, String word2) {
-        return word1.contains(word2) || word2.contains(word1) ||
-                calculateLevenshteinDistance(word1, word2) <= 2;
     }
 
     private int calculateLevenshteinDistance(String s1, String s2) {
@@ -193,14 +180,18 @@ public class ConversationalTrie {
 
         for (int i = 1; i <= s1.length(); i++) {
             for (int j = 1; j <= s2.length(); j++) {
-                if (s1.charAt(i-1) == s2.charAt(j-1)) {
-                    dp[i][j] = dp[i-1][j-1];
+                if (s1.charAt(i - 1) == s2.charAt(j - 1)) {
+                    dp[i][j] = dp[i - 1][j - 1];
                 } else {
-                    dp[i][j] = 1 + Math.min(Math.min(dp[i-1][j], dp[i][j-1]), dp[i-1][j-1]);
+                    dp[i][j] = 1 + Math.min(Math.min(dp[i - 1][j], dp[i][j - 1]), dp[i - 1][j - 1]);
                 }
             }
         }
-
         return dp[s1.length()][s2.length()];
+    }
+
+    private double getSimilarity(String s1, String s2) {
+        int distance = calculateLevenshteinDistance(s1, s2);
+        return 1 - ((double) distance / Math.max(s1.length(), s2.length()));
     }
 }

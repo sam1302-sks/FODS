@@ -170,9 +170,10 @@ public class ChatBotService {
         return new ArrayList<>();
     }
 
-    private List<String> getAvailableOptions(TrieNode node) {
-        return new ArrayList<>(node.getChildren().keySet());
+    private java.util.List<String> getAvailableOptions(TrieNode node) {
+        return new java.util.ArrayList<>(node.getChildren().keySet());
     }
+
 
     public void cleanupExpiredSessions() {
         long currentTime = System.currentTimeMillis();
